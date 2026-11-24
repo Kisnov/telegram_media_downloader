@@ -536,6 +536,12 @@ async def worker(client: pyrogram.client.Client):
                 await download_task(client, message, node)
         except Exception as e:
             logger.exception(f"{e}")
+            # count a crash before download_task recorded it, or the chat never finishes
+            if not node.bot and node.download_status.get(message.id) in (
+                None,
+                DownloadStatus.Downloading,
+            ):
+                app.set_download_id(node, message.id, DownloadStatus.FailedDownload)
 
 
 async def download_chat_task(

@@ -11,6 +11,7 @@ from typing import List, Union
 import mock
 import pyrogram
 
+import media_downloader
 from media_downloader import (
     _can_download,
     _check_config,
@@ -1038,6 +1039,25 @@ class MediaDownloaderTestCase(unittest.TestCase):
     def test_check_config_suc(self):
         app.update_config()
         self.assertEqual(_check_config(), True)
+
+    def test_worker_counts_crashed_download_once(self):
+        for recorded_status in (None, DownloadStatus.SuccessDownload):
+            rest_app(MOCK_CONF)
+            node = TaskNode(chat_id=8654123)
+            message = MockMessage(id=7, media=True, chat_id=8654123)
+            if recorded_status:
+                app.set_download_id(node, message.id, recorded_status)
+                node.download_status[message.id] = recorded_status
+
+            async def crash(*_):
+                app.is_running = False
+                raise RuntimeError("crash")
+
+            media_downloader.queue.put_nowait((message, node))
+            with mock.patch("media_downloader.download_task", new=crash):
+                self.loop.run_until_complete(worker(MockClient()))
+
+            self.assertEqual(app.chat_download_config[8654123].finish_task, 1)
 
     # @mock.patch(
     #     "media_downloader.queue",
