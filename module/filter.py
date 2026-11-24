@@ -27,7 +27,7 @@ class BaseFilter:
         # Build the lexer and parser
         # lex.lex(module=self)
         self.lexer = lex.lex(module=self)
-        self.yacc = yacc.yacc(module=self)
+        self.yacc = yacc.yacc(module=self, write_tables=False, debug=False)
 
     def reset(self):
         """Reset all symbol"""
