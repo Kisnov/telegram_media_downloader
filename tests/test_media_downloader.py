@@ -3,6 +3,7 @@ import asyncio
 import os
 import platform
 import queue
+import signal
 import sys
 import unittest
 from datetime import datetime
@@ -1007,6 +1008,24 @@ class MediaDownloaderTestCase(unittest.TestCase):
     @mock.patch("media_downloader.RETRY_TIME_OUT", new=1)
     @mock.patch("media_downloader.logger")
     def test_keyboard_interrupt(self, mock_logger):
+        rest_app(MOCK_CONF)
+
+        main()
+
+        mock_logger.info.assert_any_call("KeyboardInterrupt")
+        mock_logger.success.assert_called_with(
+            "Updated last read message_id to config file,total download 0, total upload file 0"
+        )
+
+    @mock.patch(
+        "media_downloader.app.pre_run", new=lambda: signal.raise_signal(signal.SIGTERM)
+    )
+    @mock.patch("media_downloader.HookClient", new=MockClient)
+    @mock.patch("media_downloader.RETRY_TIME_OUT", new=1)
+    @mock.patch("media_downloader.logger")
+    def test_sigterm_saves_config(self, mock_logger):
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            self.addCleanup(signal.signal, sig, signal.getsignal(sig))
         rest_app(MOCK_CONF)
 
         main()
