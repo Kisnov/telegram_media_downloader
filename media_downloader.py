@@ -48,6 +48,7 @@ app = Application(CONFIG_NAME, DATA_FILE_NAME, APPLICATION_NAME)
 
 queue: asyncio.Queue = asyncio.Queue()
 RETRY_TIME_OUT = 3
+NETWORK_RETRY_BACKOFF = (10, 60)
 
 logging.getLogger("pyrogram.session.session").addFilter(LogFilter())
 logging.getLogger("pyrogram.client").addFilter(LogFilter())
@@ -485,6 +486,16 @@ async def download_media(
                 logger.error(
                     f"Message[{message.id}]: {_t('Timing out after 3 reties, download skipped.')}"
                 )
+        except (ConnectionError, TimeoutError) as e:
+            # network errors are usually gone after a pause, disk errors are not
+            if _check_timeout(retry, message.id):
+                logger.error(f"Message[{message.id}]: {e!r} after 3 retries")
+                break
+            logger.warning(
+                f"Message[{message.id}]: {e!r}, {_t('retrying after')} "
+                f"{NETWORK_RETRY_BACKOFF[retry]} {_t('seconds')}"
+            )
+            await asyncio.sleep(NETWORK_RETRY_BACKOFF[retry])
         except Exception as e:
             # pylint: disable = C0301
             logger.error(

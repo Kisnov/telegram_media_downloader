@@ -342,6 +342,11 @@ class MockClient:
             raise pyrogram.errors.exceptions.flood_420.FloodWait(value=420)
         elif mock_message.id == 421:
             raise Exception
+        elif mock_message.id == 423 and not getattr(self, "timed_out", False):
+            self.timed_out = True
+            raise TimeoutError
+        elif mock_message.id == 424:
+            raise ConnectionResetError
         return kwargs["file_name"]
 
     async def edit_message_text(self, *args, **kwargs):
@@ -829,6 +834,25 @@ class MediaDownloaderTestCase(unittest.TestCase):
             )
         )
         self.assertEqual((DownloadStatus.FailedDownload, None), result)
+
+        # Test a network error is retried after a pause
+        for message_id, status in (
+            (423, DownloadStatus.SuccessDownload),
+            (424, DownloadStatus.FailedDownload),
+        ):
+            patch_sleep.reset_mock()
+            message = MockMessage(
+                id=message_id,
+                media=True,
+                video=MockVideo(file_name="network.mov", mime_type="video/mov"),
+            )
+            result = self.loop.run_until_complete(
+                async_download_media(
+                    client, message, ["video", "photo"], {"video": ["all"]}
+                )
+            )
+            self.assertEqual(status, result[0])
+            patch_sleep.assert_any_call(10)
 
         # Test other Exception
         message = MockMessage(
