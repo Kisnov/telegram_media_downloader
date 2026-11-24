@@ -381,7 +381,7 @@ class Application:
         self._chat_id: str = ""
         self.media_types: List[str] = []
         self.file_formats: dict = {}
-        self.proxy: dict = {}
+        self.proxy: Optional[dict] = None
         self.restart_program = False
         self.config: dict = {}
         self.app_data: dict = {}

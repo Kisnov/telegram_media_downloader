@@ -9,14 +9,13 @@ import time
 from copy import deepcopy
 from datetime import datetime
 from functools import wraps
-from io import BytesIO, StringIO
+from io import BytesIO
 from mimetypes import MimeTypes
 from typing import Callable, Iterable, List, Optional, Tuple, Union
 
 import pyrogram
 from loguru import logger
 from pyrogram import enums, parser, types, utils
-from pyrogram.client import Cache
 from pyrogram.enums import MessageEntityType
 from pyrogram.file_id import (
     FILE_REFERENCE_FLAG,
@@ -26,7 +25,6 @@ from pyrogram.file_id import (
     b64_decode,
     rle_decode,
 )
-from pyrogram.mime_types import mime_types
 
 from module.app import (
     Application,
@@ -48,14 +46,13 @@ from utils.format import (
 )
 from utils.meta_data import MetaData
 
-_mimetypes = MimeTypes()
-_mimetypes.readfp(StringIO(mime_types))
-_download_cache = Cache(1024 * 1024 * 1024)
+_mimetypes: MimeTypes = pyrogram.Client.mimetypes
+_download_cache: dict = {}
 
 
 def reset_download_cache():
     """Reset download cache"""
-    _download_cache.store.clear()
+    _download_cache.clear()
 
 
 def _guess_mime_type(filename: str) -> Optional[str]:
@@ -992,7 +989,10 @@ def record_download_status(func):
         file_formats: dict,
         node: TaskNode,
     ):
-        if _download_cache[(node.chat_id, message.id)] is DownloadStatus.Downloading:
+        if (
+            _download_cache.get((node.chat_id, message.id))
+            is DownloadStatus.Downloading
+        ):
             return DownloadStatus.Downloading, None
 
         _download_cache[(node.chat_id, message.id)] = DownloadStatus.Downloading
@@ -1421,101 +1421,15 @@ async def update_upload_stat(
 
 
 # pylint: enable=W0201
-class HookSession(pyrogram.session.Session):
-    """Hook Session"""
-
-    def start_timeout(self: pyrogram.session.Session, start_timeout: int):
-        """
-        Set the start timeout for the session.
-
-        Args:
-            start_timeout (int): The start timeout value in seconds.
-
-        Returns:
-            None
-        """
-        self.START_TIMEOUT = start_timeout
-
-
 # pylint: disable=all
 class HookClient(pyrogram.Client):
-    """Hook Client"""
+    """Client with a configurable session start timeout"""
 
-    # pylint: disable=R0901
-    START_TIME_OUT = 60
-
-    def __init__(self, name: str, **kwargs):
-        if "start_timeout" in kwargs:
-            value = kwargs.get("start_timeout")
-            if value:
-                self.START_TIME_OUT = value
-            kwargs.pop("start_timeout")
-
+    def __init__(self, name: str, start_timeout: Optional[int] = None, **kwargs):
         super().__init__(name, **kwargs)
-
-    async def connect(
-        self,
-    ) -> bool:
-        """
-        Connects the client to the server.
-
-        Returns:
-            bool: True if the client successfully
-                connects to the server, False otherwise.
-
-        Raises:
-            ConnectionError: If the client is already connected.
-
-        """
-        if self.is_connected:  # type: ignore
-            raise ConnectionError("Client is already connected")
-
-        await self.load_session()
-
-        self.session = HookSession(
-            self,
-            await self.storage.dc_id(),
-            await self.storage.auth_key(),
-            await self.storage.test_mode(),
-        )
-        self.session.start_timeout(self.START_TIME_OUT)
-
-        await self.session.start()
-
-        self.is_connected = True
-
-        return bool(await self.storage.user_id())
-
-    async def start(self):
-        """
-        Starts the client by performing necessary initialization steps.
-
-        Returns:
-            The initialized client instance.
-        """
-        is_authorized = await self.connect()
-
-        try:
-            if not is_authorized:
-                await self.authorize()
-
-            if not await self.storage.is_bot() and self.takeout:
-                self.takeout_id = (
-                    await self.invoke(
-                        pyrogram.raw.functions.account.InitTakeoutSession()
-                    )
-                ).id
-                logger.warning(f"Takeout session {self.takeout_id} initiated")
-
-            await self.invoke(pyrogram.raw.functions.updates.GetState())
-        except (Exception, KeyboardInterrupt):
-            await self.disconnect()
-            raise
-        else:
-            self.me = await self.get_me()
-            await self.initialize()
-
-            return self
+        # every Kurigram session is created inside get_session, so set it on the class
+        if start_timeout:
+            pyrogram.session.Session.START_TIMEOUT = start_timeout
 
 
 # pylint: disable=R0914,R0913
