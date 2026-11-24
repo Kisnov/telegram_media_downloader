@@ -648,6 +648,8 @@ async def stop_server(client: pyrogram.Client):
 
 
 def setup_exit_signal_handlers():
+    """Turn SIGINT and SIGTERM into KeyboardInterrupt so main saves the config"""
+
     def signal_exit(signum, _):
         logger.debug(f"Received signal: {signum}. Graceful Exit...")
         raise KeyboardInterrupt()
