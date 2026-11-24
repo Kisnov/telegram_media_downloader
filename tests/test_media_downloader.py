@@ -102,7 +102,7 @@ def rest_app(conf: dict):
     app.api_hash: str = ""
     app.media_types: List[str] = []
     app.file_formats: dict = {}
-    app.proxy: dict = {}
+    app.proxy = None
     app.restart_program = False
     app.config: dict = {}
     app.app_data: dict = {}
